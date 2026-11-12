@@ -311,41 +311,35 @@ graph TD
 
 ```mermaid
 flowchart TD
-    Start([用戶輸入或定時排程觸發]) --> Step1[接收輸入: 自然語言提問 / AMI 遙測資料]
-    Step1 --> IntentClassifier{意圖分流判定}
-    
-    IntentClassifier -->|異常用電診斷| RouteDiag[提取指定迴路時序 & 呼叫 NILM 引擎]
-    IntentClassifier -->|尖峰節能調度| RouteSched[檢索明日台電 TOU 尖離峰費率]
-    IntentClassifier -->|電費暴增諮詢| RouteBill[調閱歷史 30 天電表底度與氣候溫差]
-    IntentClassifier -->|即時過載告警| SafetyCheckImmediate[即時功率與契約容量校驗]
+    Start([使用者輸入或定時排程觸發]) --> Step1[接收輸入：自然語言提問 / AMI 遙測資料]
+    Step1 --> IntentClassifier{明確分流判定}
 
-    RouteDiag --> RetrieveData[④ Data Retrieval: 檢索台電費率 + 歷史 15-min AMI 電表]
+    IntentClassifier -->|異常用電診斷| RouteDiag[提取指定線路項目 & 呼叫 NILM 引擎]
+    IntentClassifier -->|尖峰節能調度| RouteSched[搜尋明日台電 TOU 尖離峰費率]
+    IntentClassifier -->|電費暴增諮詢| RouteBill[調閱歷史30天電錶底與氣候溫差]
+    IntentClassifier -->|瞬間過載| SafetyCheckImmediate[即時電力與契約檢核]
+
+    RouteDiag --> RetrieveData[資料擷取：搜尋台電費率 + 歷程 15 分鐘 AMI 電錶]
     RouteSched --> RetrieveData
     RouteBill --> RetrieveData
 
-    RetrieveData --> AnalyticsRun[⑤ 執行 Analytics: 負載時序預測 + 功耗指紋比對]
-    AnalyticsRun --> DomainEval[⑥ 結合 Domain: 建築 2R2C 熱阻抗 + PMV 舒適度指標]
-    
-    DomainEval --> ConfidenceCalc[計算綜合推理信心度 Confidence Score]
-    
-    ConfidenceCalc --> ConfJudge{Confidence >= 0.80 ?}
-    
-    ConfJudge -->|否 (< 0.80)| ClarifyLoop[發起澄清迴圈: 向用戶提示 2~3 項情境細節確認<br/>例: 近期是否增設高耗能電暖器或冷凍冷藏庫?]
-    ClarifyLoop --> WaitUser[等待用戶補充背景資訊]
-    WaitUser --> Step1
+    RetrieveData --> AnalyticsRun[執行 Analytics: 負載指紋比對]
+    AnalyticsRun --> DomainEval[結合 Domain: 建築 2R2C 熱阻抗 + PMV 舒適度指標]
 
-    ConfJudge -->|是 (>= 0.80)| CandidatePlan[⑦ Decision Engine: 生成候選調度/節能排程方案]
-    
-    SafetyCheckImmediate --> SafetyGuard
-    CandidatePlan --> SafetyGuard{過載安全檢查守門<br/>Peak Power > 0.90 × 契約容量?}
-    
-    SafetyGuard -->|是: 具過載跳電風險| SafetyBreaker[觸發安全降級阻斷機制 Safety Breaker<br/>1. 剔除高耗能非關鍵排程<br/>2. 啟用儲能或強制限電階梯<br/>3. 發出紅色安全推播告警]
-    SafetyBreaker --> FormatOutput
+    DomainEval --> ConfidenceCalc[計算綜合推理置信度得分]
+    ConfidenceCalc --> ConfJudge{"置信度 >= 0.80 ?"}
 
-    SafetyGuard -->|否: 負載位於安全綠區| AcceptPlan[核准節能調度排程與診斷說明]
-    AcceptPlan --> FormatOutput[⑧ Output Module: 格式化為自然語言建議、可視化圖表與 IoT 執行指令]
+    ConfJudge -- "否 (< 0.80)" --> ClarifyLoop[Clarification Loop: 主動追問使用者補充參數]
+    ClarifyLoop --> Step1
 
-    FormatOutput --> End([交付用戶並監聽執行反饋])
+    ConfJudge -- "是 (>= 0.80)" --> SafetyCheck{"用電安全守門員:<br/>是否超過 80% 斷路器容量?"}
+
+    SafetyCheck -- "警告: 過載風險" --> Fallback[安全降級: 拒絕排程並建議分段開啟]
+    SafetyCheck -- 通過 --> GeneratePlan[生成時間電價最佳化排程與節能報告]
+    SafetyCheckImmediate -- 異常 --> Fallback
+
+    Fallback --> Output([輸出結構化文字報告 + 來源標籤])
+    GeneratePlan --> Output
 ```
 
 ---
